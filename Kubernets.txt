@@ -1,0 +1,106 @@
+deploy kubernets
+-----------------------------------------------------------------------
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bb-demo
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      bb: web
+  template:
+    metadata:
+      labels:
+        bb: web
+    spec:
+      containers:
+      - name: bb-site
+        image: sree9818/getting-started
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bb-entrypoint
+  namespace: default
+spec:
+  type: NodePort
+  selector:
+    bb: web
+  ports:
+  - port: 3000
+    targetPort: 3000
+    nodePort: 30001
+
+
+PS D:\> cd kubernet
+PS D:\kubernet> kubectl apply -f bb.yaml
+deployment.apps/bb-demo unchanged
+service/bb-entrypoint unchanged
+PS D:\kubernet> kubectl get deployments
+NAME      READY   UP-TO-DATE   AVAILABLE   AGE
+bb-demo   1/1     1            1           20h
+PS D:\kubernet> kubectl get services
+NAME            TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)          AGE
+bb-entrypoint   NodePort    10.100.173.78   <none>        3000:30001/TCP   20h
+kubernetes      ClusterIP   10.96.0.1       <none>        443/TCP          4d16h
+PS D:\kubernet> kubectl delete -f bb.yaml
+deployment.apps "bb-demo" deleted
+service "bb-entrypoint" deleted
+
+
+deploy to swarm
+----------------------------------------------
+
+version: '3.7'
+
+services:
+ bb-app:
+  image: sree9818/getting-started
+  ports: 
+   - "8000:3000"
+
+
+PS D:\kubernet> docker stack deploy -c bb-stack.yaml demo
+Updating service demo_bb-app (id: uhbmycv04yaigil3jcacd2f8e)
+PS D:\kubernet> docker service ls
+ID             NAME            MODE         REPLICAS   IMAGE                             PORTS
+uhbmycv04yai   demo_bb-app     replicated   1/1        sree9818/getting-started:latest   *:8000->3000/tcp
+hujhe872pfnc   my-prometheus   replicated   1/1        prom/prometheus:latest            *:9090->9090/tcp
+lrdr9h2nyz13   ping_service    replicated   10/10      alpine:latest
+PS D:\kubernet> docker stack rm demo
+Removing service demo_bb-app
+Removing network demo_default
+
+
+docker metrics with prometheus
+------------------------------------------------------------------------------
+daemon.json
+{
+    "metrics-addr": "127.0.0.1:9223",
+    "experimental": true
+}
+
+prometheus.yaml
+
+global:
+ scrape_interval: 15s 
+ evaluation_interval: 15s
+external_labels:
+ monitor: 'codelab-monitor'
+rule_files:
+scrape_configs:
+ - job_name: 'prometheus'
+static_configs:
+ - targets: ['host.docker.internal:9090']
+ - job_name: 'docker'
+static_configs:
+ - tragets: ['192.168.65.1:9323']
+
+PS C:\Users\Sree> docker service create --replicas 1 --name my-prometheus 
+--mount type=bind,source=C:/tmp/prometheus.yaml,destination=/etc/prometheus/promettheus.yaml --publish published=9090,target=9090,protocol=tcp prom/prometheus
+PS C:\Users\Sree> docker service create --replicas 10 --name ping_service alpine ping docker.com
+PS C:\Users\Sree> docker service remove ping_service
+ping_service
